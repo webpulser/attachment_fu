@@ -148,16 +148,16 @@ module Technoweenie # :nodoc:
         alias :public_filename :ftp_url
 
         def create_temp_file
-          write_to_temp_file current_data
+          tempfile = Tempfile.new(nil, Technoweenie::AttachmentFu.tempfile_path)
+          Net::FTP.open(ftp_config[:server]) do |ftp|
+            ftp.login(ftp_config[:login], ftp_config[:password])
+            ftp.getbinaryfile(File.join(ftp_config[:base_upload_path], full_filename), tempfile.path)
+          end
+          tempfile
         end
 
         def current_data
-          Net::FTP.open(ftp_config[:server]) do |ftp|
-            ftp.login(ftp_config[:login], ftp_config[:password])
-            ftp.getbinaryfile(File.join(ftp_config[:base_upload_path], full_filename)) do |data|
-              return data
-            end
-          end
+          create_temp_file.read
         end
 
         # Partitions the given path into an array of path components.
