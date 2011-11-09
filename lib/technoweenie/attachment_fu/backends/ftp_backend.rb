@@ -199,7 +199,10 @@ module Technoweenie # :nodoc:
             ftp = Net::FTP.new(ftp_config[:server])
             ftp.login(ftp_config[:login], ftp_config[:password])
             dest_path = File.join(ftp_config[:base_upload_path], full_filename)
-            ftp.delete(dest_path) rescue nil# gone
+            @deleted = ftp.delete(dest_path) rescue nil# gone
+            ftp.close
+            
+            return @deleted
           end
 
           def rename_file
