@@ -149,10 +149,11 @@ module Technoweenie # :nodoc:
 
         def create_temp_file
           tempfile = Tempfile.new(nil, Technoweenie::AttachmentFu.tempfile_path)
-          Net::FTP.open(ftp_config[:server]) do |ftp|
-            ftp.login(ftp_config[:login], ftp_config[:password])
+
+          Net::FTP.open(ftp_config[:server], ftp_config[:login], ftp_config[:password]) do |ftp|
             ftp.getbinaryfile(File.join(ftp_config[:base_upload_path], full_filename), tempfile.path)
           end
+
           tempfile
         end
 
@@ -169,10 +170,10 @@ module Technoweenie # :nodoc:
         # hashing the string value of the id with SHA-512, and splitting the result
         # into 4 components. If the id a 128-bit UUID (as set by :uuid_primary_key => true)
         # then it will be split into 2 components.
-        # 
+        #
         # To turn this off entirely, set :partition => false.
         def partitioned_path(*args)
-          if respond_to?(:attachment_options) && attachment_options[:partition] == false 
+          if respond_to?(:attachment_options) && attachment_options[:partition] == false
             args
           elsif attachment_options[:uuid_primary_key]
             # Primary key is a 128-bit UUID in hex format. Split it into 2 components.
@@ -196,41 +197,37 @@ module Technoweenie # :nodoc:
           # Called in the after_destroy callback
           def destroy_file
             return true if ftp_config[:read_only]
-            ftp = Net::FTP.new(ftp_config[:server])
-            ftp.login(ftp_config[:login], ftp_config[:password])
+
             dest_path = File.join(ftp_config[:base_upload_path], full_filename)
-            @deleted = ftp.delete(dest_path) rescue nil# gone
-            ftp.close
-            
-            return @deleted
+            Net::FTP.open(ftp_config[:server], ftp_config[:login], ftp_config[:password]) do |ftp|
+              @deleted = ftp.delete(dest_path) rescue nil# gone
+            end
+
+            @deleted
           end
 
           def rename_file
-            return true if ftp_config[:read_only]
-            return unless @old_filename && @old_filename != filename
-            old_full_filename = File.join(base_path, @old_filename)
+            if @old_filename and @old_filename == filename and not ftp_config[:read_only]
+              old_full_filename = File.join(base_path, @old_filename)
+              src_path = File.join(ftp_config[:base_upload_path], old_full_filename)
+              dest_path = File.join(ftp_config[:base_upload_path], full_filename)
 
-            src_path = File.join(ftp_config[:base_upload_path], old_full_filename)
-            dest_path = File.join(ftp_config[:base_upload_path], full_filename)
-
-            ftp = Net::FTP.new(ftp_config[:server])
-            ftp.login(ftp_config[:login], ftp_config[:password])
-
-            ftp.rename(src_path, dest_path)
-            ftp.close
+              Net::FTP.open(ftp_config[:server], ftp_config[:login], ftp_config[:password]) do |ftp|
+                ftp.rename(src_path, dest_path)
+              end
+            end
 
             @old_filename = nil
             true
           end
 
           def save_to_storage
-            if save_attachment?
-              ftp = Net::FTP.new(ftp_config[:server])
-              ftp.login(ftp_config[:login], ftp_config[:password])
+            if save_attachment? and not ftp_config[:read_only]
               dest_path = File.join(ftp_config[:base_upload_path], full_filename)
-              ftp.makedirs_(File.dirname(dest_path))
-              ftp.putbinaryfile( temp_path, dest_path, 1024)
-              ftp.close
+              Net::FTP.open(ftp_config[:server], ftp_config[:login], ftp_config[:password]) do |ftp|
+                ftp.makedirs_(File.dirname(dest_path))
+                ftp.putbinaryfile( temp_path, dest_path, 1024)
+              end
             end
 
             @old_filename = nil
